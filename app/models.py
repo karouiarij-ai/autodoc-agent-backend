@@ -1,17 +1,13 @@
-"""SQLAlchemy database models"""
-from sqlalchemy import Column, Integer, String, DateTime
+from sqlalchemy import Column, String, DateTime
 from datetime import datetime
-
-from app.db import Base
-
+from .db import Base
 
 class Job(Base):
-    """Job model for documentation generation tasks"""
     __tablename__ = "jobs"
 
-    id = Column(Integer, primary_key=True, index=True)
-    repo_url = Column(String, nullable=False, index=True)
-    status = Column(String, default="pending")  # pending, processing, completed, failed
+    id = Column(String, primary_key=True, index=True)
+    repo_url = Column(String, nullable=False)
+    status = Column(String, nullable=False, default="pending")
     result_url = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow)

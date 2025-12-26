@@ -1,46 +1,45 @@
-"""FastAPI application with job management endpoints"""
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, BackgroundTasks, HTTPException
 from sqlalchemy.orm import Session
-from typing import List
+from .db import Base, engine, SessionLocal
+from . import models, schemas
+from .jobs import create_job, enqueue_job
 
-from app import models, schemas
-from app.db import engine, get_db
-from app.jobs import create_documentation_job
+Base.metadata.create_all(bind=engine)
 
-# Create database tables
-models.Base.metadata.create_all(bind=engine)
+app = FastAPI(title="Autodoc Agent Backend")
 
-app = FastAPI(
-    title="AutoDoc Agent Backend",
-    description="Automated documentation generation service",
-    version="1.0.0"
-)
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
+@app.post("/jobs", response_model=schemas.JobResponse)
+def create_job_endpoint(
+    payload: schemas.CreateJobRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
+    job_id = create_job(db, payload.repo_url)
+    enqueue_job(background_tasks, job_id, SessionLocal)
 
-@app.get("/")
-def read_root():
-    """Health check endpoint"""
-    return {"message": "AutoDoc Agent Backend is running", "status": "healthy"}
-
-
-@app.post("/jobs", response_model=schemas.JobResponse, status_code=201)
-def create_job(job_request: schemas.CreateJobRequest, db: Session = Depends(get_db)):
-    """Create a new documentation generation job"""
-    job = create_documentation_job(db, job_request.repo_url)
-    return job
-
-
-@app.get("/jobs", response_model=List[schemas.JobResponse])
-def list_jobs(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    """List all documentation jobs"""
-    jobs = db.query(models.Job).offset(skip).limit(limit).all()
-    return jobs
-
+    job = db.query(models.Job).filter(models.Job.id == job_id).first()
+    return schemas.JobResponse(
+        id=job.id,
+        repo_url=job.repo_url,
+        status=job.status,
+        result_url=job.result_url,
+    )
 
 @app.get("/jobs/{job_id}", response_model=schemas.JobResponse)
-def get_job(job_id: int, db: Session = Depends(get_db)):
-    """Get job details by ID"""
+def get_job(job_id: str, db: Session = Depends(get_db)):
     job = db.query(models.Job).filter(models.Job.id == job_id).first()
-    if job is None:
+    if not job:
         raise HTTPException(status_code=404, detail="Job not found")
-    return job
+    return schemas.JobResponse(
+        id=job.id,
+        repo_url=job.repo_url,
+        status=job.status,
+        result_url=job.result_url,
+    )

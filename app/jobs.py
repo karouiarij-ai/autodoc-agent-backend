@@ -1,54 +1,45 @@
-"""Background job logic for documentation generation"""
 import time
-import threading
+import uuid
+from datetime import datetime
+from fastapi import BackgroundTasks
 from sqlalchemy.orm import Session
+from . import models
 
-from app import models
+FAKE_RESULT_URL = "https://example.com/docs/demo"
 
-
-def create_documentation_job(db: Session, repo_url: str) -> models.Job:
-    """Create a new documentation generation job"""
-    # Create job record
-    job = models.Job(repo_url=repo_url, status="pending")
+def create_job(db: Session, repo_url: str) -> str:
+    job_id = str(uuid.uuid4())
+    job = models.Job(
+        id=job_id,
+        repo_url=repo_url,
+        status="pending",
+        result_url=None,
+    )
     db.add(job)
     db.commit()
     db.refresh(job)
-    
-    # Start background task
-    thread = threading.Thread(target=process_job, args=(job.id, repo_url))
-    thread.daemon = True
-    thread.start()
-    
-    return job
+    return job_id
 
-
-def process_job(job_id: int, repo_url: str):
-    """Background task to process documentation generation"""
-    from app.db import SessionLocal
-    
-    db = SessionLocal()
+def run_job_background(job_id: str, db_session_factory):
+    db = db_session_factory()
     try:
-        # Update status to processing
         job = db.query(models.Job).filter(models.Job.id == job_id).first()
-        if job:
-            job.status = "processing"
-            db.commit()
-        
-        # Simulate long-running task (replace with actual documentation generation)
+        if not job:
+            return
+
+        job.status = "running"
+        job.updated_at = datetime.utcnow()
+        db.commit()
+
+        # Simulate long processing
         time.sleep(10)
-        
-        # Update status to completed
-        job = db.query(models.Job).filter(models.Job.id == job_id).first()
-        if job:
-            job.status = "completed"
-            job.result_url = f"https://docs.example.com/{job_id}"
-            db.commit()
-            
-    except Exception as e:
-        # Handle errors
-        job = db.query(models.Job).filter(models.Job.id == job_id).first()
-        if job:
-            job.status = "failed"
-            db.commit()
+
+        job.status = "done"
+        job.result_url = FAKE_RESULT_URL
+        job.updated_at = datetime.utcnow()
+        db.commit()
     finally:
         db.close()
+
+def enqueue_job(background_tasks: BackgroundTasks, job_id: str, db_session_factory):
+    background_tasks.add_task(run_job_background, job_id, db_session_factory)

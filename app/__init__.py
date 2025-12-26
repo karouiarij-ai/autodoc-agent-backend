@@ -1,1 +1,1 @@
-"""AutoDoc Agent Backend Package"""
+# empty init to make app a package
