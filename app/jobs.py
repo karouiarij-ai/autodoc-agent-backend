@@ -1,6 +1,6 @@
 import time
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import BackgroundTasks
 from sqlalchemy.orm import Session
 from . import models
@@ -11,7 +11,7 @@ def create_job(db: Session, repo_url: str) -> str:
     job_id = str(uuid.uuid4())
     job = models.Job(
         id=job_id,
-        repo_url=repo_url,
+        repo_url=str(repo_url),
         status="pending",
         result_url=None,
     )
@@ -28,7 +28,7 @@ def run_job_background(job_id: str, db_session_factory):
             return
 
         job.status = "running"
-        job.updated_at = datetime.utcnow()
+        job.updated_at = datetime.now(timezone.utc)
         db.commit()
 
         # Simulate long processing
@@ -36,7 +36,7 @@ def run_job_background(job_id: str, db_session_factory):
 
         job.status = "done"
         job.result_url = FAKE_RESULT_URL
-        job.updated_at = datetime.utcnow()
+        job.updated_at = datetime.now(timezone.utc)
         db.commit()
     finally:
         db.close()
