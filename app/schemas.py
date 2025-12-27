@@ -1,4 +1,4 @@
-from pydantic import BaseModel, HttpUrl
+from pydantic import BaseModel, HttpUrl, field_validator
 from typing import Optional
 
 class CreateJobRequest(BaseModel):
@@ -6,6 +6,10 @@ class CreateJobRequest(BaseModel):
 
 class JobResponse(BaseModel):
     id: str
-    repo_url: HttpUrl
+    repo_url: str
     status: str
     result_url: Optional[str] = None
+    error_message: Optional[str] = None
+    
+    class Config:
+        from_attributes = True
